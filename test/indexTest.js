@@ -21,37 +21,49 @@ const dom = new JSDOM(html, {
   resources: "usable"
 });
 
-//Handle fetch
-const fetchPkg = 'node_modules/whatwg-fetch/dist/fetch.umd.js';
-dom.window.eval(fs.readFileSync(fetchPkg, 'utf-8'));
+// --- CRITICAL FIX: MANUALLY MOCK FETCH IN JSDOM ---
+dom.window.fetch = () =>
+  Promise.resolve({
+    ok: true,
+    json: () =>
+      Promise.resolve([
+        {
+          title: 'sunt aut facere repellat',
+          body: 'quia et suscipit\nsuscipit'
+        },
+      ]),
+  });
 
-// Inject the transformed JavaScript into the virtual DOM
-const scriptElement = dom.window.document.createElement("script");
-scriptElement.textContent = transformedScript;
-dom.window.document.body.appendChild(scriptElement);
-
-// Expose JSDOM globals to the testing environment
+// Expose JSDOM globals to the testing environment (Node global)
 global.window = dom.window;
 global.document = dom.window.document;
 global.navigator = dom.window.navigator;
 global.HTMLElement = dom.window.HTMLElement;
 global.Node = dom.window.Node;
-global.Text = dom.window.Text;
-global.XMLHttpRequest = dom.window.XMLHttpRequest;
 
-// Sample test suite for JavaScript event handling
+// Inject and run the script
+const scriptElement = dom.window.document.createElement("script");
+scriptElement.textContent = transformedScript;
+dom.window.document.body.appendChild(scriptElement);
+
 describe('Asynchronous Fetching ', () => {
-  it('should fetch to external api and add information to page', async() => {
-    await new Promise(resolve => setTimeout(resolve, 200)); 
-    let postDisplay = document.querySelector("#post-list")
-    expect(postDisplay.innerHTML).to.include('sunt aut')
+  // Give the async fetch time to complete before running assertions
+  const waitForAsync = () => new Promise(resolve => setTimeout(resolve, 100));
+
+  it('should fetch to external api and add information to page', async () => {
+    await waitForAsync();
+    let postDisplay = document.querySelector("#post-list");
+    expect(postDisplay.innerHTML).to.include('sunt aut');
+  });
+
+  it('should create an h1 and p element to add', async () => {
+    await waitForAsync();
+    let h1 = document.querySelector("h1");
+    let p = document.querySelector("p");
     
-  })
-  it('should create an h1 and p element to add', async() => {
-    await new Promise(resolve => setTimeout(resolve, 200)); 
-    let h1 = document.querySelector("h1")
-    let p = document.querySelector("p")
-    expect(h1.textContent).to.include("sunt aut facere repellat")
-    expect(p.textContent).to.include("quia et suscipit\nsuscipit")
-  })
-})
+    expect(h1).to.not.be.null;
+    expect(p).to.not.be.null;
+    expect(h1.textContent).to.include("sunt aut facere repellat");
+    expect(p.textContent).to.include("quia et suscipit\nsuscipit");
+  });
+});
